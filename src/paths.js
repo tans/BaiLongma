@@ -124,7 +124,7 @@ export function rescueDataFromInstallDir() {
 
   let installDir
   try {
-    // exe 所在目录就是安装目录（process.execPath = <install>\Bailongma.exe）
+    // exe 所在目录就是安装目录（process.execPath = <install>\GeekAgent.exe）
     installDir = path.dirname(process.execPath)
   } catch {
     return rescued
@@ -133,8 +133,8 @@ export function rescueDataFromInstallDir() {
   // If an old installer recorded a shared parent folder as InstallLocation
   // (for example AppData\Local\Programs or D:\Software), scanning and moving
   // "unknown" directories would touch other applications. Only rescue from a
-  // dedicated Bailongma install folder.
-  if (path.basename(installDir).toLowerCase() !== 'bailongma') {
+  // dedicated GeekAgent install folder.
+  if (path.basename(installDir).toLowerCase() !== 'geekagent') {
     console.warn(`[paths] skip install-dir rescue from unsafe shared folder: ${installDir}`)
     return rescued
   }
