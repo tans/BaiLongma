@@ -15,18 +15,18 @@ const { pathToFileURL } = require('url')
 const { autoUpdater } = require('electron-updater')
 
 const IS_DEV = !app.isPackaged
-const WINDOWS_APP_USER_MODEL_ID = 'com.xiaoyuanda.geekagent'
+const WINDOWS_APP_USER_MODEL_ID = 'com.xiaoyuanda.liloavatar'
 const USER_DIR = app.getPath('userData')
 const CODE_ROOT = app.getAppPath()
 const RESOURCE_ROOT = CODE_ROOT
 const BACKEND_ENTRY = path.join(CODE_ROOT, 'src', 'index.js')
 
-// 持久化日志：把 console.* 镜像到 USER_DIR/logs/geekagent.log，
+// 持久化日志：把 console.* 镜像到 USER_DIR/logs/liloavatar.log，
 // 安装版没有 stdout 的情况下，卡死/崩溃后还能 tail 这个文件复盘。
 // 简易 rotate：> 5MB 时把当前文件改名 .old（覆盖上一份 .old），下次写入重开。
 const LOG_DIR = path.join(USER_DIR, 'logs')
-const LOG_FILE = path.join(LOG_DIR, 'geekagent.log')
-const LOG_FILE_OLD = path.join(LOG_DIR, 'geekagent.old.log')
+const LOG_FILE = path.join(LOG_DIR, 'liloavatar.log')
+const LOG_FILE_OLD = path.join(LOG_DIR, 'liloavatar.old.log')
 const LOG_MAX_BYTES = 5 * 1024 * 1024
 try { fs.mkdirSync(LOG_DIR, { recursive: true }) } catch {}
 function rotateLogIfNeeded() {
@@ -72,7 +72,7 @@ process.on('unhandledRejection', (reason) => {
 process.on('uncaughtException', (err) => {
   console.error('[uncaughtException]', err?.stack || err?.message || String(err))
 })
-console.log(`[main] GeekAgent ${app.getVersion()} starting, logs -> ${LOG_FILE}`)
+console.log(`[main] LiloAvatar ${app.getVersion()} starting, logs -> ${LOG_FILE}`)
 
 let mainWindow = null
 let backendPort = 0
@@ -166,7 +166,7 @@ async function createWindow() {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#0b0b0e',
-    title: 'GeekAgent',
+    title: 'LiloAvatar',
     icon: path.join(RESOURCE_ROOT, 'build', 'icon.png'),
     webPreferences: {
       contextIsolation: true,
@@ -233,7 +233,7 @@ async function createWindow() {
 function setupTray() {
   const iconPath = path.join(RESOURCE_ROOT, 'build', 'icon.ico')
   tray = new Tray(nativeImage.createFromPath(iconPath))
-  tray.setToolTip('GeekAgent')
+  tray.setToolTip('LiloAvatar')
 
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -470,7 +470,7 @@ app.whenReady().then(async () => {
     await bootstrapBackend(backendPort)
     await waitForBackend(backendPort)
   } catch (err) {
-    dialog.showErrorBox('Startup failed', `Unable to start the GeekAgent backend:\n${err.message}`)
+    dialog.showErrorBox('Startup failed', `Unable to start the LiloAvatar backend:\n${err.message}`)
     app.quit()
     return
   }

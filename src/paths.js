@@ -124,7 +124,7 @@ export function rescueDataFromInstallDir() {
 
   let installDir
   try {
-    // exe 所在目录就是安装目录（process.execPath = <install>\GeekAgent.exe）
+    // exe 所在目录就是安装目录（process.execPath = <install>\LiloAvatar.exe）
     installDir = path.dirname(process.execPath)
   } catch {
     return rescued
@@ -133,8 +133,8 @@ export function rescueDataFromInstallDir() {
   // If an old installer recorded a shared parent folder as InstallLocation
   // (for example AppData\Local\Programs or D:\Software), scanning and moving
   // "unknown" directories would touch other applications. Only rescue from a
-  // dedicated GeekAgent install folder.
-  if (path.basename(installDir).toLowerCase() !== 'geekagent') {
+  // dedicated LiloAvatar install folder.
+  if (path.basename(installDir).toLowerCase() !== 'liloavatar') {
     console.warn(`[paths] skip install-dir rescue from unsafe shared folder: ${installDir}`)
     return rescued
   }

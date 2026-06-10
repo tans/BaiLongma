@@ -94,7 +94,7 @@ rm -rf dist
 NODE_OPTIONS=--max-old-space-size=4096 npm run build
 ```
 
-产物路径：`dist/GeekAgent Setup <version>.exe`
+产物路径：`dist/LiloAvatar Setup <version>.exe`
 
 ---
 

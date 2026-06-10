@@ -1,7 +1,7 @@
 {
-  "name": "geekagent",
-  "productName": "GeekAgent",
-  "version": "2.1.374",
+  "name": "liloavatar",
+  "productName": "LiloAvatar",
+  "version": "1.0.0",
   "description": "A continuously running digital consciousness framework",
   "type": "module",
   "main": "electron/main.cjs",
@@ -45,8 +45,8 @@
     "playwright": "^1.59.1"
   },
   "build": {
-    "appId": "com.xiaoyuanda.geekagent",
-    "productName": "GeekAgent",
+    "appId": "com.xiaoyuanda.liloavatar",
+    "productName": "LiloAvatar",
     "artifactName": "${productName}-Setup-${version}.${ext}",
     "npmRebuild": false,
     "asar": true,
@@ -108,7 +108,7 @@
       "uninstallerSidebar": "build/uninstallerSidebar.bmp",
       "createDesktopShortcut": false,
       "createStartMenuShortcut": false,
-      "shortcutName": "GeekAgent"
+      "shortcutName": "LiloAvatar"
     },
     "publish": [
       {
