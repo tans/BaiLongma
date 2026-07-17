@@ -17,6 +17,7 @@ import { register } from 'node:module'
 register('./test-prompt-split-loader.mjs', import.meta.url)
 
 const { buildSystemPrompt, buildContextBlock, combinePromptForPreview } = await import('./prompt.js')
+const { buildAutonomousTickDirections } = await import('./runtime/tick-policy.js')
 
 function assert(cond, label) {
   if (!cond) {
@@ -50,13 +51,16 @@ const sys2 = buildSystemPrompt({
   constraints: [{ content: 'r2' }],
   thoughtStack: [{ concept: 'X', line: 'y' }],
   awakeningTicks: 3,
-  hasActiveTask: true,
   task: 'do thing',
 })
 assert(sys1 === sys2, 'system stays stable when only dynamic fields differ')
 assert(sys1.includes('Longma'), 'system contains agent name')
 assert(sys1.includes('Curious, brief'), 'system contains persona')
 assert(sys1.includes('## Top-Level Behavior Rules'), 'system contains hard floor')
+assert(sys1.includes('neither passive nor proactive by default'), 'system gives Tick posture judgment to the model')
+assert(!sys1.includes('You are passive by default'), 'system no longer imposes a passive Tick default')
+assert(sys1.includes('Progress notes are action-first'), 'system contains action-first progress note rule')
+assert(sys1.includes('harmless, reversible local display actions'), 'system tells agent to directly open harmless local display results')
 assert(!sys1.includes('round1 mem'), 'system does NOT contain dynamic memories')
 assert(!sys1.includes('round1 dir'), 'system does NOT contain dynamic directions')
 assert(!sys2.includes('do thing'), 'system does NOT contain active task content')
@@ -107,6 +111,17 @@ assert(!sys1.includes('Sandbox Status:'), 'system does NOT contain dynamic sandb
 const justNothing = buildContextBlock({ hasActiveTask: false })
 assert(justNothing.startsWith('<context>'), 'minimal context still wrapped')
 assert(justNothing.includes('<task active="false">'), 'minimal context advertises no active task')
+assert(justNothing.includes('does not prescribe silence, activity, or communication'), 'no-task context remains behaviorally neutral')
+assert(!justNothing.includes('Default to quiet presence'), 'no-task context has no forced quiet default')
+
+const awakeningContext = buildContextBlock({ awakeningTicks: 2 })
+assert(awakeningContext.includes('not a prescribed exploration program'), 'awakening is context rather than a fixed workflow')
+assert(!awakeningContext.includes('Just go look'), 'awakening no longer forces exploration')
+assert(!awakeningContext.includes('Do not ask again'), 'awakening no longer hard-codes communication behavior')
+
+const tickContext = buildContextBlock({ directions: buildAutonomousTickDirections() })
+assert(tickContext.includes('<directions>'), 'autonomous Tick policy is carried in round-local directions')
+assert(tickContext.includes('make your own situational judgment'), 'final Tick context delegates semantic judgment to the model')
 
 // 4) Person + curiosity composition
 const ctxPerson = buildContextBlock({
@@ -153,11 +168,11 @@ assert(!sysNeutral.includes('WeChat Connection'), 'neutral input: no WeChat Conn
 assert(!sysNeutral.includes('WeChat Outbound Constraint'), 'neutral input: no WeChat Outbound block')
 assert(!sysNeutral.includes('## Focus Banner'), 'neutral input: no Focus Banner block')
 assert(!sysNeutral.includes('## Security Sandbox'), 'neutral input: no Security Sandbox block')
-// Neutral baseline 仍保留 CORE：Top-Level、Response Rules、ACUI 主段、Voice 段
+// Neutral baseline 仍保留 CORE：Top-Level、Response Rules、Visual Surfaces 主段、Voice 段
 assert(sysNeutral.includes('## Top-Level Behavior Rules'), 'neutral: CORE Top-Level kept')
-assert(sysNeutral.includes('## ACUI Visual Channel'), 'neutral: CORE ACUI main kept')
+assert(sysNeutral.includes('## Visual Surfaces'), 'neutral: CORE Visual Surfaces main kept')
 assert(sysNeutral.includes('## Voice Input: Spoken Brevity'), 'neutral: CORE Voice kept')
-assert(sysNeutral.includes('### ui_show Rules'), 'neutral: CORE ui_show Rules kept')
+assert(sysNeutral.includes('### Kinds & Composition'), 'neutral: CORE Kinds & Composition kept')
 
 // 8.1 Music gate
 const sysMusic = buildSystemPrompt({ agentName: 'Longma', persona: 'p', userMessage: '放首周杰伦的歌' })
@@ -169,16 +184,26 @@ assert(sysMusic3.includes('Music Mode: Highest Priority'), '"换一首": Music M
 
 // 8.2 Video gate
 const sysVideo = buildSystemPrompt({ agentName: 'Longma', persona: 'p', userMessage: '帮我在B站看视频' })
-assert(sysVideo.includes('Video Mode: Reply Brevity'), 'video keyword: Video Mode injected')
+assert(sysVideo.includes('## Video Mode'), 'video keyword: Video Mode injected')
 const sysVideo2 = buildSystemPrompt({ agentName: 'Longma', persona: 'p', userMessage: 'open youtube' })
-assert(sysVideo2.includes('Video Mode: Reply Brevity'), 'youtube: Video Mode injected')
+assert(sysVideo2.includes('## Video Mode'), 'youtube: Video Mode injected')
 
-// 8.3 WeatherCard gate
+// 8.3 Weather Surface gate（工作流块现由 weather 能力经 capability-registry 注入）
 const sysWeather = buildSystemPrompt({ agentName: 'Longma', persona: 'p', userMessage: '今天天气怎么样' })
-assert(sysWeather.includes('WeatherCard Rules'), 'weather keyword: WeatherCard Rules injected')
-assert(sysWeather.includes('wttr.in'), 'WeatherCard block contains wttr.in source line')
+assert(sysWeather.includes('Weather Surface Rules'), 'weather keyword: Weather Surface Rules injected')
+assert(sysWeather.includes('wttr.in'), 'Weather block contains wttr.in source line')
 const sysWeather2 = buildSystemPrompt({ agentName: 'Longma', persona: 'p', userMessage: 'what about the weather' })
-assert(sysWeather2.includes('WeatherCard Rules'), 'english weather: WeatherCard Rules injected')
+assert(sysWeather2.includes('Weather Surface Rules'), 'english weather: Weather Surface Rules injected')
+
+// 8.3b 能力工作流块（hotspot / worldcup / software-install）经 capability-registry 注入
+const sysHotspot = buildSystemPrompt({ agentName: 'Longma', persona: 'p', userMessage: '看看今天的热搜' })
+assert(sysHotspot.includes('Hotspot Panel'), 'hotspot keyword: Hotspot Panel block injected (via capability)')
+const sysWorldcup = buildSystemPrompt({ agentName: 'Longma', persona: 'p', userMessage: '世界杯比分怎么样' })
+assert(sysWorldcup.includes('World Cup Panel'), 'worldcup keyword: World Cup Panel block injected (via capability)')
+const sysInstall = buildSystemPrompt({ agentName: 'Longma', persona: 'p', userMessage: '帮我安装一个 QQ' })
+assert(sysInstall.includes('Software Install Workflow'), 'install keyword: Software Install Workflow block injected (via capability)')
+assert(!sysNeutral.includes('Hotspot Panel') && !sysNeutral.includes('World Cup Panel') && !sysNeutral.includes('Software Install Workflow'),
+  'neutral input: no capability workflow blocks injected')
 
 // 8.4 WeChat Connection gate
 const sysWcConn = buildSystemPrompt({ agentName: 'Longma', persona: 'p', userMessage: '帮我连接微信' })
@@ -224,7 +249,7 @@ for (const s of [sysNeutral, sysMusic, sysVideo, sysWeather, sysWcConn, sysWcOut
   assert(s.includes('## Relationship Posture'), 'CORE: Relationship Posture always present')
   assert(s.includes('## Response Rules'), 'CORE: Response Rules always present')
   assert(s.includes('## Self-Sufficient Execution'), 'CORE: Self-Sufficient Execution always present')
-  assert(s.includes('## ACUI Visual Channel'), 'CORE: ACUI Visual Channel always present')
+  assert(s.includes('## Visual Surfaces'), 'CORE: Visual Surfaces always present')
 }
 
 // 8.10 Token 节省估算：neutral baseline vs full-injection

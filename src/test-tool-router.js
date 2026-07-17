@@ -77,24 +77,37 @@ function hasNone(tools, names) {
   assert(has(tools, 'send_message'), '4) core still present')
 }
 
-// ====== 5) TICK 广注入 ======
+// ====== 5) TICK 精简基线 + 按需发现 ======
 {
   const tools = selectTools({
     messageBody: '',
     isTick: true,
     senderId: null,
   })
-  // 按需求：core + web + memory + reminders + prefetch + hotspot + ticker
+  // Tick 只直接拿判断/记忆/节奏能力；业务能力由 find_tool 按判断装载。
   assert(has(tools, 'send_message'), '5) TICK has core send_message')
+  assert(has(tools, 'find_tool'), '5) TICK has capability discovery')
   assert(has(tools, 'search_memory'), '5) TICK has search_memory')
-  assert(has(tools, 'web_search'), '5) TICK has web_search')
-  assert(has(tools, 'manage_reminder'), '5) TICK has manage_reminder')
-  assert(has(tools, 'manage_prefetch_task'), '5) TICK has manage_prefetch_task')
-  assert(has(tools, 'hotspot_mode'), '5) TICK has hotspot_mode')
   assert(has(tools, 'set_tick_interval'), '5) TICK has set_tick_interval')
-  // 但仍省 exec / admin / media（除非关键词命中）
-  assert(hasNone(tools, ['exec_command', 'install_tool', 'media_mode']),
-    `5) TICK does NOT pull exec/admin/media (got: ${tools.join(',')})`)
+  assert(tools.length === 9, `5) clean TICK baseline stays compact at 9 tools (got ${tools.length}: ${tools.join(',')})`)
+  assert(hasNone(tools, [
+    'web_search', 'read_file', 'manage_reminder', 'manage_prefetch_task',
+    'hotspot_mode', 'exec_command', 'install_tool', 'media_mode',
+  ]), `5) TICK does not pre-decide business capabilities (got: ${tools.join(',')})`)
+}
+
+// ====== 5b) Active-task TICK keeps task controls, not unrelated business schemas ======
+{
+  const tools = selectTools({
+    messageBody: '',
+    isTick: true,
+    senderId: null,
+    hasTask: true,
+  })
+  assert(hasAll(tools, ['complete_task', 'update_task_step', 'review_work', 'focus_banner']),
+    `5b) task TICK keeps explicit task judgment controls (got: ${tools.join(',')})`)
+  assert(hasNone(tools, ['web_search', 'read_file', 'manage_reminder', 'hotspot_mode']),
+    `5b) task TICK still discovers unrelated capabilities on demand (got: ${tools.join(',')})`)
 }
 
 // ====== 6) hasTask=true → 完整 task 控制组 ======
@@ -125,7 +138,7 @@ function hasNone(tools, names) {
     '6b) no task → no complete_task / update_task_step')
 }
 
-// ====== 7) Installed 工具永远全注入 ======
+// ====== 7) Installed 工具：用户轮直给，Tick 按需发现 ======
 {
   const tools = selectTools({
     messageBody: '随便说点啥',
@@ -134,7 +147,17 @@ function hasNone(tools, names) {
     installedToolNames: ['my_custom_tool', 'another_custom'],
   })
   assert(hasAll(tools, ['my_custom_tool', 'another_custom']),
-    `7) installed tools always injected (got: ${tools.join(',')})`)
+    `7) user turn keeps installed tools directly available (got: ${tools.join(',')})`)
+}
+
+{
+  const tools = selectTools({
+    messageBody: '',
+    isTick: true,
+    senderId: null,
+    installedToolNames: ['my_custom_tool'],
+  })
+  assert(!has(tools, 'my_custom_tool'), '7b) installed tool is discoverable, not an implicit Tick autonomy grant')
 }
 
 // ====== 8) 中英混合：media 触发 ======
@@ -203,14 +226,35 @@ function hasNone(tools, names) {
     startupSelfCheckActive: true,
   })
   assert(hasAll(tools, [
-    'speak',
-    'complete_startup_self_check',
-    'read_file',
-    'write_file',
-    'web_search',
-    'media_mode',
-    'hotspot_mode',
-  ]), '11) startupSelfCheckActive → full startup self-check tool set injected')
+    'speak', 'complete_startup_self_check', 'read_file', 'write_file',
+    'web_search', 'media_mode', 'hotspot_mode',
+  ]), '11) startupSelfCheckActive → fixed self-check tool set injected')
+}
+
+// ====== 11b) Worldcup / Hotspot 不再被关键词自动注入 ======
+// 设计变更：worldcup_mode / hotspot_mode 不再因关键词命中而自动注入 schema；
+// 改由 Agent 依 prompt 规则自决，需要时调 find_tool 发现并当场装载（TOOL_GROUPS 仍保留触发词供 find_tool 用）。
+{
+  const tools = selectTools({
+    messageBody: '今天世界杯的赛况怎么样了',
+    isTick: false,
+    senderId: 'ID:000001',
+  })
+  assert(!has(tools, 'worldcup_mode'),
+    `11b) 世界杯关键词不再自动注入 worldcup_mode（改 Agent 经 find_tool 自决, got: ${tools.join(',')})`)
+  assert(has(tools, 'find_tool'),
+    '11b) find_tool 常驻——Agent 可据此发现并装载 worldcup_mode')
+}
+{
+  const tools = selectTools({
+    messageBody: '微博热搜现在有什么',
+    isTick: false,
+    senderId: 'ID:000001',
+  })
+  assert(!has(tools, 'hotspot_mode'),
+    `11c) 热点关键词不再自动注入 hotspot_mode（非 TICK 轮, got: ${tools.join(',')})`)
+  assert(has(tools, 'find_tool'),
+    '11c) find_tool 常驻——Agent 可据此发现并装载 hotspot_mode')
 }
 
 // ====== 12) Exec 触发 ======
@@ -245,6 +289,44 @@ function hasNone(tools, names) {
   assert(has(tools, 'person_card_mode'),
     `14) person card keyword → person_card_mode injected (got: ${tools.join(',')})`)
 }
+{
+  const tools = selectTools({
+    messageBody: '马云是谁',
+    isTick: false,
+    senderId: 'ID:000001',
+  })
+  assert(has(tools, 'person_card_mode'),
+    `14b) direct person question → person_card_mode injected (got: ${tools.join(',')})`)
+}
+{
+  const tools = selectTools({
+    messageBody: '帮我写一个项目介绍',
+    isTick: false,
+    senderId: 'ID:000001',
+  })
+  assert(!has(tools, 'person_card_mode'),
+    `14c) non-person introduction → person_card_mode NOT injected (got: ${tools.join(',')})`)
+}
+{
+  const tools = selectTools({
+    messageBody: '人物卡片有点问题，经常错误触发',
+    isTick: false,
+    senderId: 'ID:000001',
+  })
+  assert(!has(tools, 'person_card_mode'),
+    `14d) talking about the feature itself → person_card_mode NOT injected (got: ${tools.join(',')})`)
+}
+
+// ====== 14e) Terminal stream / progress window ======
+{
+  const tools = selectTools({
+    messageBody: 'please show a terminal stream progress window while writing files',
+    isTick: false,
+    senderId: 'ID:000001',
+  })
+  assert(has(tools, 'terminal_stream'),
+    `14e) terminal stream intent -> terminal_stream injected (got: ${tools.join(',')})`)
+}
 
 // ====== 15) RECALL 路径 ======
 {
@@ -258,6 +340,77 @@ function hasNone(tools, names) {
 }
 
 // ====== 16) Schema 数量对比（仅观察，不强制断言）======
+{
+  const tools = selectTools({
+    messageBody: '帮我安装剪映，最好下载官方安装包',
+    isTick: false,
+    senderId: 'ID:000001',
+  })
+  assert(hasAll(tools, ['install_software', 'find_tool']),
+    `16) software install intent -> dedicated install tool injected (got: ${tools.join(',')})`)
+  assert(hasNone(tools, ['web_search', 'download_file', 'exec_command']),
+    `16) software install intent does not expose manual web/shell fallback before install_software (got: ${tools.join(',')})`)
+}
+
+{
+  const tools = selectTools({
+    messageBody: '现在请你帮我安装一个 QQ',
+    isTick: false,
+    senderId: 'ID:000001',
+  })
+  assert(has(tools, 'install_software'),
+    `16b) natural app install request -> install_software injected (got: ${tools.join(',')})`)
+  assert(hasAll(tools, ['install_tool', 'list_tools']),
+    '16b) admin tools may also be present, but software install tools must not be missed')
+}
+
+{
+  const tools = selectTools({
+    messageBody: '安装一个工具市场里的自定义工具',
+    isTick: false,
+    senderId: 'ID:000001',
+  })
+  assert(hasNone(tools, ['exec_command', 'exec_task_command', 'download_file']),
+    `16c) marketplace/tool-factory install request does not over-trigger software installer tools (got: ${tools.join(',')})`)
+}
+
+{
+  const tools = selectTools({
+    messageBody: 'please install QQ for me',
+    isTick: false,
+    senderId: 'ID:000001',
+  })
+  assert(has(tools, 'install_software'),
+    `16b-en) English app install request -> install_software injected (got: ${tools.join(',')})`)
+}
+
+{
+  const tools = selectTools({
+    messageBody: 'https://docs.example.test/vision-api\n\nsk-testVisionRouterKey1234567890',
+    isTick: false,
+    senderId: 'ID:000001',
+  })
+  assert(has(tools, 'manage_api_capability'),
+    `17) API docs plus key -> manage_api_capability injected (got: ${tools.join(',')})`)
+}
+
+{
+  const tools = selectTools({
+    messageBody: '\u662f\u7684',
+    isTick: false,
+    senderId: 'ID:000001',
+    recentActionLog: [
+      {
+        tool: 'analyze_image',
+        status: 'error',
+        result_preview: '{"ok":false,"tool":"analyze_image","error":"not_configured"}',
+      },
+    ],
+  })
+  assert(has(tools, 'manage_api_capability'),
+    `18) confirm after unconfigured vision -> manage_api_capability injected (got: ${tools.join(',')})`)
+}
+
 {
   const fullSetTools = selectTools({
     messageBody: '帮我读 D:\\readme.md，搜下 https://google.com，运行命令，提醒我，画张图，听首歌',

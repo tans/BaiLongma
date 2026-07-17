@@ -1,6 +1,6 @@
 // 自动生成的"工具清单"与"模型清单"文档文本。
 //
-// 设计目的：把白龙马自知识里最容易随版本漂移的两块——能调用哪些工具、支持哪些模型——
+// 设计目的：把LiloAvatar自知识里最容易随版本漂移的两块——能调用哪些工具、支持哪些模型——
 // 改成从代码里的唯一真源派生，而不是手写。以后增删工具 / provider / 模型，文档自动跟上，
 // 不必再人肉同步 self-knowledge.js / config-faq.js。
 //
@@ -31,7 +31,7 @@ const TOOL_CATEGORIES = [
   { label: '上网', schemas: webSchemas },
   { label: '媒体（语音 / 音乐 / 图像 / 视频）', schemas: mediaSchemas },
   { label: '记忆', schemas: memorySchemas },
-  { label: '界面 / ACUI', schemas: uiSchemas },
+  { label: '界面 / 面板', schemas: uiSchemas },
   { label: '任务与节奏', schemas: taskSchemas },
   { label: '成果审视', schemas: reviewSchemas },
   { label: '提醒与预取', schemas: remindersSchemas },

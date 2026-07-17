@@ -54,6 +54,54 @@ Function LiloAvatarFindForeignInstallRootItem
   liloavatarScanInstallRootNoClose:
 FunctionEnd
 
+Function LiloAvatarRescueForeignInstallRootItems
+  ; During upgrades, the old uninstaller may delete the whole install folder.
+  ; Move foreign items out first so third-party/user files are preserved while
+  ; the upgrade can continue.
+  StrCpy $R6 ""
+
+  liloavatarRescueForeignLoop:
+    Call LiloAvatarFindForeignInstallRootItem
+    ${if} $R3 == "0"
+      Return
+    ${endIf}
+
+    ${if} $R6 == ""
+      CreateDirectory "$APPDATA\LiloAvatar"
+      CreateDirectory "$APPDATA\LiloAvatar\install-root-rescue"
+      StrCpy $R8 "1"
+
+      liloavatarPickForeignRescueDir:
+        StrCpy $R6 "$APPDATA\LiloAvatar\install-root-rescue\upgrade-$R8"
+        IfFileExists "$R6\*.*" 0 liloavatarForeignRescueDirReady
+        IntOp $R8 $R8 + 1
+        IntCmp $R8 1000 liloavatarForeignRescueDirExhausted liloavatarPickForeignRescueDir liloavatarForeignRescueDirExhausted
+
+      liloavatarForeignRescueDirReady:
+        ClearErrors
+        CreateDirectory "$R6"
+        IfErrors liloavatarForeignRescueDirFailed
+    ${endIf}
+
+    ClearErrors
+    Rename "$INSTDIR\$R3" "$R6\$R3"
+    IfErrors liloavatarForeignRescueMoveFailed
+    DetailPrint "Moved non-LiloAvatar install-root item out of upgrade path: $INSTDIR\$R3 -> $R6\$R3"
+    Goto liloavatarRescueForeignLoop
+
+  liloavatarForeignRescueDirExhausted:
+    MessageBox MB_ICONSTOP|MB_OK "LiloAvatar could not create a unique rescue folder under:$\r$\n$\r$\n$APPDATA\LiloAvatar\install-root-rescue$\r$\n$\r$\nPlease move non-LiloAvatar content out of the install folder, then run setup again."
+    Abort
+
+  liloavatarForeignRescueDirFailed:
+    MessageBox MB_ICONSTOP|MB_OK "LiloAvatar could not create a rescue folder:$\r$\n$\r$\n$R6$\r$\n$\r$\nPlease move non-LiloAvatar content out of the install folder, then run setup again."
+    Abort
+
+  liloavatarForeignRescueMoveFailed:
+    MessageBox MB_ICONSTOP|MB_OK "LiloAvatar could not move non-LiloAvatar content out of the install folder:$\r$\n$\r$\n$INSTDIR\$R3$\r$\n$\r$\nTarget rescue folder:$\r$\n$R6$\r$\n$\r$\nPlease close programs that may be using this folder, or move it manually, then run setup again."
+    Abort
+FunctionEnd
+
 Function LiloAvatarValidateInstallDir
   Call LiloAvatarNormalizeInstallDir
 
@@ -210,17 +258,19 @@ FunctionEnd
   ; Even a folder named LiloAvatar can contain user-created or third-party
   ; folders. During upgrades, electron-builder invokes the *old* uninstaller
   ; before this new safe uninstaller exists, and old uninstallers recursively
-  ; remove the whole install folder. Refuse to continue if the install root
-  ; contains anything we do not recognize as LiloAvatar/Electron payload.
-  Call LiloAvatarFindForeignInstallRootItem
-  ${if} $R3 != "0"
-      MessageBox MB_ICONSTOP|MB_OK "LiloAvatar install folder contains non-LiloAvatar content:$\r$\n$\r$\n$INSTDIR\$R3$\r$\n$\r$\nTo protect your files and other software, this installer will not run the old uninstaller automatically. Please back up or move this content out of the LiloAvatar folder, then install again."
-      Abort
-    ${endIf}
+  ; remove the whole install folder. If this is an existing LiloAvatar install,
+  ; rescue foreign items to userData first. Fresh installs still validate and
+  ; refuse non-empty foreign folders on the install-directory page.
+  ${if} ${FileExists} "$INSTDIR\LiloAvatar.exe"
+  ${orIf} ${FileExists} "$INSTDIR\Uninstall LiloAvatar.exe"
+  ${orIf} ${FileExists} "$INSTDIR\resources\app.asar"
+    Call LiloAvatarRescueForeignInstallRootItems
+  ${endIf}
 
-  ; Native Node addons are ABI-bound to Electron. Clean old unpacked copies
-  ; before installing so upgrades cannot keep a stale better_sqlite3.node.
-  RMDir /r "$INSTDIR\resources\app.asar.unpacked\node_modules\better-sqlite3"
+  ; Do not delete native module directories in customInit. This hook runs before
+  ; the new payload has been fully extracted and validated; deleting here can
+  ; leave an otherwise working install broken if setup is cancelled or killed.
+  ; The repaired payload extraction in customInstall overwrites owned files.
 !macroend
 
 !endif

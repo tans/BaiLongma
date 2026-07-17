@@ -1,6 +1,7 @@
 // 流式 TTS 服务商接入层
 // 支持: OpenAI TTS / ElevenLabs / 火山引擎 / 豆包（方舟）
 // 统一返回 Node.js Readable stream，供 api.js pipe 到 HTTP 响应
+import '../network-proxy.js'
 import { Readable, Transform } from 'stream'
 
 export const TTS_PROVIDERS = [
@@ -57,6 +58,63 @@ export const TTS_VOICES = {
     { id: 'BV001_streaming',         label: '通用女声' },
     { id: 'BV002_streaming',         label: '通用男声' },
   ],
+}
+
+// ── 各服务商凭证要求（合成前预检的单一权威）──────────────────────────────────
+// 每个 provider 声明若干「必填组」：组内任一字段非空即满足该组（如豆包 token 可用
+// accessKey 或 apiKey）。新增/调整 provider 只动这张表，execSpeak / /tts/stream 都复用。
+// 这是根治"朗读经常失败"的关键：以前要冲到各家 API 才裸抛"缺少 API Key"，
+// 现在合成前就能给出可执行的中文引导（不硬拦截，由模型/前端转述）。
+export const TTS_PROVIDER_REQUIREMENTS = {
+  doubao: {
+    label: '豆包（方舟）',
+    groups: [{ keys: ['doubaoKey'], label: 'API Key' }],
+    guide: '请在「语音设置 → 语音合成」里选择豆包，并填入控制台的语音合成 API Key。',
+  },
+  minimax: {
+    label: 'MiniMax',
+    groups: [{ keys: ['minimaxKey'], label: 'API Key' }],
+    guide: '请在「语音设置 → 语音合成」里选择 MiniMax，并填入 MiniMax 的 API Key。',
+  },
+  openai: {
+    label: 'OpenAI TTS',
+    groups: [{ keys: ['openaiKey'], label: 'API Key' }],
+    guide: '请在「语音设置 → 语音合成」里选择 OpenAI，并填入 OpenAI 的 API Key（可选填自定义 BaseURL）。',
+  },
+  elevenlabs: {
+    label: 'ElevenLabs',
+    groups: [{ keys: ['elevenLabsKey'], label: 'API Key' }],
+    guide: '请在「语音设置 → 语音合成」里选择 ElevenLabs，并填入 ElevenLabs 的 API Key。',
+  },
+  volcano: {
+    label: '火山引擎',
+    groups: [
+      { keys: ['volcanoAppId'], label: 'AppId' },
+      { keys: ['volcanoToken'], label: 'Token' },
+    ],
+    guide: '请在「语音设置 → 语音合成」里选择火山引擎，并同时填写 AppId 和 Token 两项。',
+  },
+}
+
+// 合成前预检：当前 provider 是否选对、必填凭证是否配齐。
+// 返回 { ok:true } 或 { ok:false, provider, missing?, guide }——guide 是给用户看的可执行提示。
+export function validateTTSConfig(creds = {}) {
+  const provider = creds.provider
+  const req = TTS_PROVIDER_REQUIREMENTS[provider]
+  if (!req) {
+    return {
+      ok: false,
+      provider,
+      guide: `还没选择有效的语音合成服务商（当前：${provider || '空'}）。请在「语音设置 → 语音合成」里选择豆包 / MiniMax / OpenAI / ElevenLabs / 火山引擎 其中之一。`,
+    }
+  }
+  const missing = req.groups
+    .filter(group => !group.keys.some(k => String(creds[k] || '').trim()))
+    .map(group => group.label)
+  if (missing.length) {
+    return { ok: false, provider, missing, guide: `${req.label} 还没配置好：缺少 ${missing.join('、')}。${req.guide}` }
+  }
+  return { ok: true, provider }
 }
 
 // WHATWG ReadableStream (fetch response.body) → Node.js Readable
@@ -136,14 +194,10 @@ async function streamDoubao({
   text,
   voiceId = 'zh_female_xiaohe_uranus_bigtts',
   apiKey,
-  appId,
-  accessKey,
   resourceId,
-  style,
   speechRate,
 }) {
-  const token = accessKey || apiKey
-  if (!token) throw new Error('豆包 TTS: 缺少 API Key/Access Key，请在设置中填写豆包语音凭证')
+  if (!apiKey) throw new Error('豆包 TTS: 缺少 API Key，请在设置中填写豆包语音凭证')
   const speaker = voiceId || 'zh_female_xiaohe_uranus_bigtts'
   const resolvedResourceId = resolveDoubaoResourceId(speaker, resourceId)
   const headers = {
@@ -151,9 +205,7 @@ async function streamDoubao({
     'X-Api-Request-Id': `blm_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     'Content-Type': 'application/json',
   }
-  if (appId) headers['X-Api-App-Id'] = appId
-  if (accessKey) headers['X-Api-Access-Key'] = accessKey
-  if (apiKey) headers['X-Api-Key'] = apiKey
+  headers['X-Api-Key'] = apiKey
   const reqParams = {
     text,
     speaker,
@@ -163,12 +215,6 @@ async function streamDoubao({
   const rate = Number(speechRate)
   if (Number.isFinite(rate) && rate !== 0) {
     reqParams.audio_params.speech_rate = Math.max(-50, Math.min(100, Math.round(rate)))
-  }
-  // 情感风格：自然语言描述（如"用低沉沉稳、情绪饱满带金属感的人工智能管家声音"），
-  // 通过 additions.context_texts 注入。additions 必须是序列化后的 JSON 字符串。
-  const styleText = (style || '').trim()
-  if (styleText) {
-    reqParams.additions = JSON.stringify({ context_texts: [styleText], model_type: 4 })
   }
   const resp = await fetch('https://openspeech.bytedance.com/api/v3/tts/unidirectional', {
     method: 'POST',
@@ -318,10 +364,7 @@ export async function streamTTS({ text, provider, voiceId, keys = {} }) {
         text,
         voiceId,
         apiKey: keys.doubaoKey,
-        appId: keys.doubaoAppId,
-        accessKey: keys.doubaoAccessKey,
         resourceId: keys.doubaoResourceId,
-        style: keys.doubaoStyle,
         speechRate: keys.doubaoSpeechRate,
       })
     case 'minimax':

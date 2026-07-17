@@ -212,6 +212,7 @@ export function toggleDocPanel(topicId = null) {
 // ── 内联配置表单 ───────────────────────────────────────────────────────────────
 
 const ASR_PROVIDER_DEFS = [
+  { id: 'local', label: '本机识别（macOS）' },
   { id: 'aliyun',  label: '阿里云百炼' },
   { id: 'volcengine', label: '火山豆包' },
   { id: 'tencent', label: '腾讯云' },
@@ -219,12 +220,10 @@ const ASR_PROVIDER_DEFS = [
 ]
 
 const ASR_FIELDS = {
+  local: [],
   aliyun:  [{ key: 'aliyunApiKey',   label: 'API Key',   type: 'password', ph: 'sk-xxxxxxxx...' }],
   volcengine: [
-    { key: 'volcAsrApiKey',     label: 'API Key（新版）',    type: 'password', ph: '' },
-    { key: 'volcAsrResourceId', label: 'Resource ID',       type: 'text',     ph: 'volc.bigasr.sauc.duration' },
-    { key: 'volcAsrAppKey',     label: 'App Key（旧版）',    type: 'password', ph: '' },
-    { key: 'volcAsrAccessKey',  label: 'Access Key（旧版）', type: 'password', ph: '' },
+    { key: 'volcAsrApiKey', label: 'API Key', type: 'password', ph: '' },
   ],
   tencent: [
     { key: 'tencentSecretId',  label: 'SecretId',  type: 'password', ph: '' },
@@ -250,8 +249,6 @@ const TTS_FIELDS = {
   doubao: [
     { key: 'doubaoKey',    label: 'API Key',       type: 'password', ph: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
     { key: 'doubaoResourceId', label: 'Resource ID', type: 'text',     ph: 'seed-tts-2.0' },
-    { key: 'doubaoAppId',  label: 'App ID（可选）', type: 'text',     ph: '' },
-    { key: 'doubaoAccessKey', label: 'Access Key（旧版）', type: 'password', ph: '' },
   ],
   minimax: [],
   openai: [
@@ -301,9 +298,9 @@ function renderProviderTabs(defs, activeId, onSwitch) {
   `).join('')}</div>`
 }
 
-function renderFields(fields, state) {
+function renderFields(fields, state, emptyMessage = 'MiniMax TTS 使用与 LLM 相同的 API Key，无需额外配置。<br>确保 LLM 已设置 MiniMax 密钥即可。') {
   if (!fields || fields.length === 0) {
-    return `<div class="dpc-info">MiniMax TTS 使用与 LLM 相同的 API Key，无需额外配置。<br>确保 LLM 已设置 MiniMax 密钥即可。</div>`
+    return `<div class="dpc-info">${emptyMessage}</div>`
   }
   return fields.map(f => {
     const configured = isConfigured(state, f.key)
@@ -325,12 +322,19 @@ function renderFields(fields, state) {
   }).join('')
 }
 
+function renderAsrFields(providerId) {
+  const emptyMessage = providerId === 'local'
+    ? '使用 macOS 本地 Speech.framework，无需填写云端密钥。'
+    : '当前识别服务商无需额外配置。'
+  return renderFields(ASR_FIELDS[providerId], cfgVoiceState, emptyMessage)
+}
+
 function buildConfigHTML(topicId) {
   if (topicId === 'voice_asr') {
     return `
       <div class="dpc-section-title">⚡ 在此直接配置语音识别</div>
       ${renderProviderTabs(ASR_PROVIDER_DEFS, cfgAsrProvider)}
-      <div class="dpc-fields" id="dpc-asr-fields">${renderFields(ASR_FIELDS[cfgAsrProvider], cfgVoiceState)}</div>
+      <div class="dpc-fields" id="dpc-asr-fields">${renderAsrFields(cfgAsrProvider)}</div>
       <div class="dpc-actions">
         <button class="dpc-save-btn" id="dpc-save-btn" type="button">保存配置</button>
         <span class="dpc-status" id="dpc-status"></span>
@@ -353,7 +357,7 @@ function buildConfigHTML(topicId) {
         <div class="dpc-dual-col">
           <div class="dpc-dual-label">🎤 语音识别</div>
           ${renderProviderTabs(ASR_PROVIDER_DEFS, cfgAsrProvider)}
-          <div class="dpc-fields" id="dpc-asr-fields">${renderFields(ASR_FIELDS[cfgAsrProvider], cfgVoiceState)}</div>
+          <div class="dpc-fields" id="dpc-asr-fields">${renderAsrFields(cfgAsrProvider)}</div>
           <div class="dpc-actions">
             <button class="dpc-save-btn" id="dpc-asr-save-btn" type="button">保存 ASR</button>
             <span class="dpc-status" id="dpc-asr-status"></span>
@@ -423,7 +427,7 @@ function bindConfigForm(topicId) {
       if (isAsr && topicId === 'voice_asr') {
         cfgAsrProvider = pid
         const fieldsEl = $('dpc-asr-fields')
-        if (fieldsEl) fieldsEl.innerHTML = renderFields(ASR_FIELDS[pid], cfgVoiceState)
+        if (fieldsEl) fieldsEl.innerHTML = renderAsrFields(pid)
       } else if (isTts && topicId === 'voice_tts') {
         cfgTtsProvider = pid
         const fieldsEl = $('dpc-tts-fields')
@@ -432,7 +436,7 @@ function bindConfigForm(topicId) {
         if (isAsr) {
           cfgAsrProvider = pid
           const fieldsEl = $('dpc-asr-fields')
-          if (fieldsEl) fieldsEl.innerHTML = renderFields(ASR_FIELDS[pid], cfgVoiceState)
+          if (fieldsEl) fieldsEl.innerHTML = renderAsrFields(pid)
         } else if (isTts) {
           cfgTtsProvider = pid
           const fieldsEl = $('dpc-tts-fields')

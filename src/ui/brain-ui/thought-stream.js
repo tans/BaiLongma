@@ -7,6 +7,10 @@ const TOOL_ZH = {
   make_dir: "创建目录",
   list_dir: "查看目录",
   exec_command: "执行命令",
+  exec_quick_command: "快速命令",
+  exec_task_command: "任务命令",
+  exec_background_command: "后台命令",
+  download_file: "下载文件",
   kill_process: "终止进程",
   list_processes: "列出进程",
   web_search: "搜索网页",
@@ -25,12 +29,7 @@ const TOOL_ZH = {
   generate_lyrics: "生成歌词",
   generate_music: "生成音乐",
   generate_image: "生成图片",
-  ui_show: "推送卡片",
-  ui_update: "更新卡片",
-  ui_hide: "关闭卡片",
-  ui_patch: "微调卡片",
-  ui_register: "注册组件",
-  manage_app: "管理应用",
+  ui_set: "投影界面",
   focus_banner: "专注横幅",
   set_task: "启动任务",
   complete_task: "完成任务",
@@ -45,9 +44,11 @@ const TOOL_ZH = {
   grant_agent_delegation: "授权代理",
   complete_startup_self_check: "完成自检",
   install_tool: "安装工具",
+  install_software: "安装软件",
   uninstall_tool: "卸载工具",
   list_tools: "列出工具",
   connect_wechat: "连接微信",
+  connect_feishu: "连接飞书",
   media_mode: "媒体模式",
   hotspot_mode: "热点模式",
   open_doc_panel: "打开文档",
@@ -82,12 +83,7 @@ const TOOL_ICON = {
   generate_lyrics: "🎵",
   generate_music: "🎼",
   generate_image: "🎨",
-  ui_show: "🎴",
-  ui_update: "🔄",
-  ui_hide: "🫥",
-  ui_patch: "🩹",
-  ui_register: "📌",
-  manage_app: "📦",
+  ui_set: "🎴",
   focus_banner: "🎯",
   set_task: "📋",
   complete_task: "✅",
@@ -102,9 +98,11 @@ const TOOL_ICON = {
   grant_agent_delegation: "🤝",
   complete_startup_self_check: "🩺",
   install_tool: "🔧",
+  install_software: "⬇️",
   uninstall_tool: "🔧",
   list_tools: "🧰",
   connect_wechat: "🔗",
+  connect_feishu: "🪶",
   media_mode: "🎬",
   hotspot_mode: "🔥",
   open_doc_panel: "📖",
@@ -408,14 +406,8 @@ export class ThoughtStream {
         return this.compactText(a.prompt || "", 50);
       case "set_tick_interval":
         return a.seconds ? `${a.seconds}s · ttl ${a.ttl || 10}` : "";
-      case "ui_show":
-      case "ui_register":
-        return a.component || a.component_name || "";
-      case "ui_update":
-      case "ui_hide":
-      case "ui_patch":
-        // id 形如 selfcheckstepcard-1779294241845-692795；取首段（组件名小写形态）
-        return this.compactText(String(a.id || "").split("-")[0] || "", 30);
+      case "ui_set":
+        return this.compactText(String(a.id || a.surface?.kind || ""), 30);
       case "focus_banner":
         return a.action ? `${a.action}${a.task ? " · " + this.compactText(a.task, 30) : ""}` : "";
       case "set_task":
@@ -435,10 +427,10 @@ export class ThoughtStream {
       case "install_tool":
       case "uninstall_tool":
         return this.compactText(a.tool_name || a.name || "", 40);
+      case "install_software":
+        return this.compactText(a.software || a.brew_name || a.url || "", 50);
       case "music":
         return this.compactText(a.title || a.action || "", 40);
-      case "manage_app":
-        return this.compactText(a.action || "", 30);
       case "media_mode":
       case "hotspot_mode":
       case "person_card_mode":
@@ -488,17 +480,6 @@ export class ThoughtStream {
     const reason = payload.policy?.reason || "策略拒绝";
     const riskLabel = risk === "high" ? "高风险" : risk === "medium" ? "中风险" : risk === "low" ? "低风险" : "受限";
     return `权限被拒绝（${riskLabel}）：${reason}`;
-  }
-
-  formatUIShowDetail(payload, name) {
-    if (payload?.ok === false) {
-      return payload.error ? this.compactText(payload.error, 160) : "";
-    }
-    if (payload?.ok) {
-      if (name === "ui_show") return ""; // subject 已经说明 component
-      if (name === "ui_register") return "组件已注册到 ACUI。";
-    }
-    return "";
   }
 
   formatSearchMemoryDetail(payload) {
@@ -557,13 +538,6 @@ export class ThoughtStream {
       if (parsed) return this.formatExecCommandDetail(parsed);
       // JSON 残缺时不展示原文，给个通用兜底
       return "命令已执行（结果过长未展开）。";
-    }
-
-    if (name === "ui_show" || name === "ui_update" || name === "ui_hide" || name === "ui_patch" || name === "ui_register") {
-      // 错误是裸字符串，例如 "错误：组件未注册"
-      const raw = String(result || "").trim();
-      if (!parsed && raw.startsWith("错误")) return this.compactText(raw, 160);
-      return this.formatUIShowDetail(parsed, name);
     }
 
     if (name === "search_memory") {
