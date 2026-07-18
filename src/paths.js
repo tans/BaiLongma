@@ -145,7 +145,7 @@ export function rescueDataFromInstallDir() {
   // (for example AppData\Local\Programs or D:\Software), scanning and moving
   // "unknown" directories would touch other applications. Only rescue from a
   // dedicated LiloAvatar install folder.
-  if (path.basename(installDir).toLowerCase() !== 'bailongma') {
+  if (path.basename(installDir).toLowerCase() !== 'liloavatar') {
     console.warn(`[paths] skip install-dir rescue from unsafe shared folder: ${installDir}`)
     return rescued
   }
